@@ -96,7 +96,7 @@ fn main() {
         }
     }
     fn softmax(x: [f32; 10], x_n: f32) -> f32 {
-        x_n.exp() / x.iter().sum::<f32>().exp()
+        x_n.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
     }
 
     fn predict(
@@ -118,11 +118,16 @@ fn main() {
         let mut o2: [f32; 10] = [0.0; 10];
         for (neuron, weights) in w2.iter().enumerate() {
             for (i, value) in o1.iter().enumerate() {
-                o2[neuron] = softmax(o1, value * weights[i] + b2[neuron]);
+                o2[neuron] = value * weights[i] + b2[neuron];
             }
         }
 
-        return o2;
+        let mut predictions: [f32; 10] = [0.0; 10];
+        for (i, output) in o2.iter().enumerate() {
+            predictions[i] = softmax(o2, *output);
+        }
+
+        return predictions;
     }
 
     let probabilities = predict(dataset[0].values, w1, b1, w2, b2);
@@ -132,8 +137,12 @@ fn main() {
             prediction = (num, *prob)
         }
     }
-    
-    //println!("{:?}", probabilities);
-    println!("Prediction: {0}, Confidence: {1}%", prediction.0 + 1, prediction.1 * 100.0);
+
+    println!("{:?}", probabilities.map(|x|));
+    println!(
+        "Prediction: {0}, Confidence: {1}%",
+        prediction.0 + 1,
+        prediction.1 * 100.0
+    );
     println!("Actual: {0}", dataset[0].label);
 }

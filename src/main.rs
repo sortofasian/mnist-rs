@@ -35,18 +35,6 @@ fn main() {
         prev_output
     }
 
-    fn normalize(layers: Vec<Layer>, img: Image) -> Vec<f32> {
-        fn softmax(x: Vec<f32>, x_n: f32) -> f32 {
-            x_n.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
-        }
-
-        let output = predict(img.values, layers);
-        output
-            .iter()
-            .map(|value| softmax(output.clone(), *value))
-            .collect::<Vec<f32>>()
-    }
-
     fn report(output: Vec<f32>, img: Image) {
         let predicted = output.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
         let predicted_index = output.iter().position(|value| value == predicted).unwrap();
@@ -59,22 +47,28 @@ fn main() {
         println!("Actual: {0}", img.label);
     }
 
+    fn loss(output: Vec<f32>, expected: Vec<f32>) -> f32 {
+        let loss = output
+            .iter()
+            .zip(expected.iter())
+            .map(|(p, y)| p.log10() * y)
+            .sum::<f32>();
+        loss * -1.0 / expected.len() as f32
+    }
+
     let mut layers: Vec<Layer> = Vec::new();
-    layers.push(Layer::new(784, 10, |x| x.max(0.0))); // Hidden
-    layers.push(Layer::new(10, 10, |x| x)); // Output
+    layers.push(Layer::new(784, 10, |xn, _| xn.max(0.0))); // Hidden
+    layers.push(Layer::new(10, 10, |xn, x| softmax(xn, x))); // Output
+    fn softmax(xn: f32, x: Vec<f32>) -> f32 {
+        xn.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
+    }
 
     let img = Image::new(data.next().unwrap());
-    let result = normalize(layers.clone(), img.clone());
+    let result = predict(img.clone().values, layers.clone());
     report(result.clone(), img.clone());
 
-    let mut correct_vector = [0_f32; 10].to_vec();
-    correct_vector[(img.label - 1) as usize] = 1.0;
-    let loss: f32 = (result
-        .iter()
-        .zip(correct_vector.iter())
-        .map(|(p, y)| p.log10() * y)
-        .sum::<f32>())
-        * -1.0
-        / correct_vector.len() as f32;
+    let mut y = [0_f32; 10].to_vec();
+    y[(img.label - 1) as usize] = 1.0;
+    let loss: f32 = loss(result, y);
     println!("{:?}", loss);
 }

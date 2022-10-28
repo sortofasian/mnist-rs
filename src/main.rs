@@ -6,143 +6,131 @@ use std::path::Path;
 
 fn main() {
     println!("Loading dataset...");
+    let mut file = String::new();
+    File::open(Path::new("train.csv"))
+        .expect("File open failed")
+        .read_to_string(&mut file)
+        .expect("Read to string failed");
+    let mut data = file.lines().skip(1); // Skip column labels
 
-    let file = {
-        let fp = Path::new("train.csv");
-        let mut file = File::open(fp).expect("Failed to open train file");
-
-        let mut buffer = String::new();
-        file.read_to_string(&mut buffer)
-            .expect("Failed to read file");
-
-        buffer
-    };
-
-    let mut dataset: Vec<Image> = Vec::new();
     struct Image {
         label: u8,
-        values: [f32; 784],
+        values: Vec<f32>,
     }
+    impl Image {
+        pub fn new(csv: &str) -> Self {
+            let mut data = csv.split_terminator(',');
 
-    println!("Parsing data...");
-    let mut current_line = 1;
+            let label = data
+                .next()
+                .unwrap()
+                .parse::<u8>()
+                .expect("Parsing label failed");
+            let mut values: Vec<f32> = Vec::new();
 
-    for line in file.lines() {
-        let mut label: u8 = 0;
-        let mut values: [f32; 784] = [0.0; 784];
-
-        let mut skip = false;
-        for (i, value) in line.split_terminator(',').enumerate() {
-            // Handle column labels; check value for any non-numeric chars
-            if !value.chars().all(|c| c.is_numeric()) {
-                skip = true;
-                break;
+            for value in data {
+                values.push(value.parse::<f32>().expect("Parsing values failed") / 255.0);
             }
 
-            if i == 0 {
-                label = value.parse::<u8>().expect("Failed to parse label");
-                continue;
-            }
-
-            let parsed_val = value.parse::<f32>().expect("Failed to parse value");
-            values[i - 1] = parsed_val / 255.0; // Convert 0-255 values into 0-1
+            Image { label, values }
         }
-        if skip {
-            continue;
-        }
-
-        dataset.push(Image { label, values });
-
-        print!("\rLine {0}", current_line);
-        current_line += 1;
     }
 
-    println!("\rLoaded {:?} images\n", dataset.len());
+    struct Layer {
+        inputs: u16,
+        outputs: u16,
+        weights: Vec<Vec<f32>>,
+        biases: Vec<f32>,
+        activation: fn(f32) -> f32,
+    }
+    impl Layer {
+        pub fn new(inputs: u16, outputs: u16, activation: fn(f32) -> f32) -> Self {
+            let mut rng = thread_rng();
+
+            // Initialize arrays for weights and biases with random values from -1.0 to 1.0;
+            let mut weights: Vec<Vec<f32>> = Vec::new();
+            for _ in 0..outputs {
+                let mut weights_n: Vec<f32> = Vec::new();
+                for _ in 0..inputs {
+                    weights_n.push(rng.gen_range(-1.0..1.0));
+                }
+                weights.push(weights_n);
+            }
+
+            let mut biases: Vec<f32> = Vec::new();
+            for _ in 0..outputs {
+                biases.push(rng.gen_range(-1.0..1.0));
+            }
+
+            Layer {
+                inputs,
+                outputs,
+                weights,
+                biases,
+                activation,
+            }
+        }
+    }
 
     println!("Initializing neural network...");
 
-    // Initialize arrays for weights and biases with random values from -1.0 to 1.0;
-    let mut rng = thread_rng();
-    let mut w1: [[f32; 784]; 10] = [[0.0; 784]; 10];
-    for neuron in w1.iter_mut() {
-        for weight in neuron.iter_mut() {
-            *weight = rng.gen::<f32>() * 2.0 - 1.0;
+    fn predict(input: Vec<f32>, layers: Vec<Layer>) -> Vec<f32> {
+        layers.iter().reduce(|acc, layer| {
+            if acc.outputs != layer.inputs {
+                panic!("Layer shapes do not match") // Sanity check
+            }
+            layer
+        });
+
+        let mut prev_output: Vec<f32> = input;
+        for layer in layers {
+            let mut temp: Vec<f32> = Vec::new();
+            for (weights, bias) in layer.weights.iter().zip(layer.biases) {
+                let value = prev_output
+                    .iter()
+                    .zip(weights)
+                    .map(|(value, weight)| value * weight)
+                    .reduce(|sum, value| value + sum)
+                    .unwrap()
+                    + bias;
+                temp.push((layer.activation)(value));
+            }
+            prev_output.clear();
+            prev_output = temp;
         }
+
+        prev_output
     }
 
-    let mut b1: [f32; 10] = [0.0; 10];
-    for bias in b1.iter_mut() {
-        *bias = rng.gen::<f32>() * 2.0 - 1.0;
-    }
-
-    let mut w2: [[f32; 10]; 10] = [[0.0; 10]; 10];
-    for neuron in w2.iter_mut() {
-        for weight in neuron.iter_mut() {
-            *weight = rng.gen::<f32>() * 2.0 - 1.0;
-        }
-    }
-
-    let mut b2: [f32; 10] = [0.0; 10];
-    for bias in b2.iter_mut() {
-        *bias = rng.gen::<f32>() * 2.0 - 1.0;
-    }
-
-    println!("NN initialized\n");
+    let mut layers: Vec<Layer> = Vec::new();
 
     fn relu(x: f32) -> f32 {
-        match x > 0.0 {
-            true => x,
-            false => 0.0,
-        }
+        x.max(0.0)
     }
-    fn softmax(x: [f32; 10], x_n: f32) -> f32 {
+    layers.push(Layer::new(784, 10, relu));
+
+    fn softmax(x: Vec<f32>, x_n: f32) -> f32 {
         x_n.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
     }
+    layers.push(Layer::new(10, 10, |x| x));
 
-    fn predict(
-        x: [f32; 784],
-        w1: [[f32; 784]; 10],
-        b1: [f32; 10],
-        w2: [[f32; 10]; 10],
-        b2: [f32; 10],
-    ) -> [f32; 10] {
-        // Layer 1: ReLU
-        let mut o1: [f32; 10] = [0.0; 10];
-        for (neuron, weights) in w1.iter().enumerate() {
-            for (i, value) in x.iter().enumerate() {
-                o1[neuron] = relu(value * weights[i] + b1[neuron]);
-            }
-        }
+    let img = Image::new(data.next().unwrap());
+    let predict_raw = predict(img.values, layers);
+    let probabilities: Vec<f32> = predict_raw
+        .iter()
+        .map(|xn| softmax(predict_raw.clone(), *xn))
+        .collect();
 
-        //Layer 2: Softmax output
-        let mut o2: [f32; 10] = [0.0; 10];
-        for (neuron, weights) in w2.iter().enumerate() {
-            for (i, value) in o1.iter().enumerate() {
-                o2[neuron] = value * weights[i] + b2[neuron];
-            }
-        }
-
-        let mut predictions: [f32; 10] = [0.0; 10];
-        for (i, output) in o2.iter().enumerate() {
-            predictions[i] = softmax(o2, *output);
-        }
-
-        return predictions;
-    }
-
-    let probabilities = predict(dataset[0].values, w1, b1, w2, b2);
     let mut prediction = (0, 0.0);
     for (num, prob) in probabilities.iter().enumerate() {
         if prob >= &prediction.1 {
             prediction = (num, *prob)
         }
     }
-
-    println!("{:?}", probabilities.map(|x|));
     println!(
         "Prediction: {0}, Confidence: {1}%",
         prediction.0 + 1,
         prediction.1 * 100.0
     );
-    println!("Actual: {0}", dataset[0].label);
+    println!("Actual: {0}", img.label);
 }

@@ -71,12 +71,8 @@ fn main() {
         println!("Actual: {0}", img.label);
     }
 
-    fn relu(x: f32) -> f32 {
-        x.max(0.0)
-    }
-
     let mut layers: Vec<Layer> = Vec::new();
-    layers.push(Layer::new(784, 10, relu)); // Hidden
+    layers.push(Layer::new(784, 10, |x| x.max(0.0))); // Hidden
     layers.push(Layer::new(10, 10, |x| x)); // Output
 
     let img = Image::new(data.next().unwrap());

@@ -21,27 +21,15 @@ fn main() {
 
     fn predict(input: Vec<f32>, layers: Vec<Layer>) -> Vec<f32> {
         layers.iter().reduce(|acc, layer| {
-            if acc.outputs != layer.inputs {
+            if acc.neurons != layer.inputs {
                 panic!("Layer shapes do not match") // Sanity check
             }
             layer
         });
 
         let mut prev_output: Vec<f32> = input;
-        for layer in layers {
-            let mut temp: Vec<f32> = Vec::new();
-            for (weights, bias) in layer.weights.iter().zip(layer.biases) {
-                let value = prev_output
-                    .iter()
-                    .zip(weights)
-                    .map(|(value, weight)| value * weight)
-                    .reduce(|sum, value| value + sum)
-                    .unwrap()
-                    + bias;
-                temp.push((layer.activation)(value));
-            }
-            prev_output.clear();
-            prev_output = temp;
+        for mut layer in layers {
+            prev_output = layer.propogate(prev_output.clone()).to_vec();
         }
 
         prev_output
@@ -77,5 +65,16 @@ fn main() {
 
     let img = Image::new(data.next().unwrap());
     let result = normalize(layers.clone(), img.clone());
-    report(result, img);
+    report(result.clone(), img.clone());
+
+    let mut correct_vector = [0_f32; 10].to_vec();
+    correct_vector[(img.label - 1) as usize] = 1.0;
+    let loss: f32 = (result
+        .iter()
+        .zip(correct_vector.iter())
+        .map(|(p, y)| p.log10() * y)
+        .sum::<f32>())
+        * -1.0
+        / correct_vector.len() as f32;
+    println!("{:?}", loss);
 }

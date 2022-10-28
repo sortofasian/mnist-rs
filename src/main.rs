@@ -1,8 +1,12 @@
-use rand::thread_rng;
-use rand::Rng;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+mod layer;
+use crate::layer::Layer;
+
+mod image;
+use crate::image::Image;
 
 fn main() {
     println!("Loading dataset...");
@@ -12,65 +16,6 @@ fn main() {
         .read_to_string(&mut file)
         .expect("Read to string failed");
     let mut data = file.lines().skip(1); // Skip column labels
-
-    struct Image {
-        label: u8,
-        values: Vec<f32>,
-    }
-    impl Image {
-        pub fn new(csv: &str) -> Self {
-            let mut data = csv.split_terminator(',');
-
-            let label = data
-                .next()
-                .unwrap()
-                .parse::<u8>()
-                .expect("Parsing label failed");
-            let mut values: Vec<f32> = Vec::new();
-
-            for value in data {
-                values.push(value.parse::<f32>().expect("Parsing values failed") / 255.0);
-            }
-
-            Image { label, values }
-        }
-    }
-
-    struct Layer {
-        inputs: u16,
-        outputs: u16,
-        weights: Vec<Vec<f32>>,
-        biases: Vec<f32>,
-        activation: fn(f32) -> f32,
-    }
-    impl Layer {
-        pub fn new(inputs: u16, outputs: u16, activation: fn(f32) -> f32) -> Self {
-            let mut rng = thread_rng();
-
-            // Initialize arrays for weights and biases with random values from -1.0 to 1.0;
-            let mut weights: Vec<Vec<f32>> = Vec::new();
-            for _ in 0..outputs {
-                let mut weights_n: Vec<f32> = Vec::new();
-                for _ in 0..inputs {
-                    weights_n.push(rng.gen_range(-1.0..1.0));
-                }
-                weights.push(weights_n);
-            }
-
-            let mut biases: Vec<f32> = Vec::new();
-            for _ in 0..outputs {
-                biases.push(rng.gen_range(-1.0..1.0));
-            }
-
-            Layer {
-                inputs,
-                outputs,
-                weights,
-                biases,
-                activation,
-            }
-        }
-    }
 
     println!("Initializing neural network...");
 
@@ -102,35 +47,39 @@ fn main() {
         prev_output
     }
 
-    let mut layers: Vec<Layer> = Vec::new();
+    fn normalize(layers: Vec<Layer>, img: Image) -> Vec<f32> {
+        fn softmax(x: Vec<f32>, x_n: f32) -> f32 {
+            x_n.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
+        }
+
+        let output = predict(img.values, layers);
+        output
+            .iter()
+            .map(|value| softmax(output.clone(), *value))
+            .collect::<Vec<f32>>()
+    }
+
+    fn report(output: Vec<f32>, img: Image) {
+        let predicted = output.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
+        let predicted_index = output.iter().position(|value| value == predicted).unwrap();
+
+        println!(
+            "Prediction: {0}, Confidence: {1}%",
+            predicted_index + 1,
+            predicted * 100.0
+        );
+        println!("Actual: {0}", img.label);
+    }
 
     fn relu(x: f32) -> f32 {
         x.max(0.0)
     }
-    layers.push(Layer::new(784, 10, relu));
 
-    fn softmax(x: Vec<f32>, x_n: f32) -> f32 {
-        x_n.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
-    }
-    layers.push(Layer::new(10, 10, |x| x));
+    let mut layers: Vec<Layer> = Vec::new();
+    layers.push(Layer::new(784, 10, relu)); // Hidden
+    layers.push(Layer::new(10, 10, |x| x)); // Output
 
     let img = Image::new(data.next().unwrap());
-    let predict_raw = predict(img.values, layers);
-    let probabilities: Vec<f32> = predict_raw
-        .iter()
-        .map(|xn| softmax(predict_raw.clone(), *xn))
-        .collect();
-
-    let mut prediction = (0, 0.0);
-    for (num, prob) in probabilities.iter().enumerate() {
-        if prob >= &prediction.1 {
-            prediction = (num, *prob)
-        }
-    }
-    println!(
-        "Prediction: {0}, Confidence: {1}%",
-        prediction.0 + 1,
-        prediction.1 * 100.0
-    );
-    println!("Actual: {0}", img.label);
+    let result = normalize(layers.clone(), img.clone());
+    report(result, img);
 }

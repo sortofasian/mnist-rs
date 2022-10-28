@@ -1,6 +1,7 @@
 #[derive(Clone)]
 pub struct Image {
     pub label: u8,
+    pub y_values: Vec<f32>,
     pub values: Vec<f32>,
 }
 impl Image {
@@ -18,6 +19,13 @@ impl Image {
             values.push(value.parse::<f32>().expect("Parsing values failed") / 255.0);
         }
 
-        Image { label, values }
+        let mut y_values = [0_f32; 10].to_vec();
+        y_values[(label - 1) as usize] = 1.0;
+
+        Image {
+            label,
+            y_values,
+            values,
+        }
     }
 }

@@ -65,10 +65,8 @@ fn main() {
 
     let img = Image::new(data.next().unwrap());
     let result = predict(img.clone().values, layers.clone());
-    report(result.clone(), img.clone());
+    let loss: f32 = loss(result.clone(), img.clone().y_values);
 
-    let mut y = [0_f32; 10].to_vec();
-    y[(img.label - 1) as usize] = 1.0;
-    let loss: f32 = loss(result, y);
+    report(result.clone(), img.clone());
     println!("{:?}", loss);
 }

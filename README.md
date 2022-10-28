@@ -3,8 +3,9 @@ Inspired by Samson Zhang's video, [Building a neural network FROM SCRATCH (no Te
 
 I made it my goal to inflict as much self-harm as possible in the name of learning Rust, so the only dependency of this project is the `rand` crate.
 
-## Todo
+## To-do
 - Backprop
 - Try ConvNet
 - Modularization
 - Refactoring
+- Pass pointers/refs instead of copies into fns

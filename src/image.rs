@@ -20,7 +20,7 @@ impl Image {
         }
 
         let mut y_values = [0_f32; 10].to_vec();
-        y_values[(label - 1) as usize] = 1.0;
+        y_values[label as usize] = 1.0;
 
         Image {
             label,

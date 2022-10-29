@@ -1,3 +1,5 @@
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -15,7 +17,9 @@ fn main() {
         .expect("File open failed")
         .read_to_string(&mut file)
         .expect("Read to string failed");
-    let mut data = file.lines().skip(1); // Skip column labels
+    let mut data: Vec<&str> = file.lines().skip(1).collect(); // Skip column labels
+    let mut rng = thread_rng();
+    data.shuffle(&mut rng);
 
     println!("Initializing neural network...");
 
@@ -41,7 +45,7 @@ fn main() {
 
         println!(
             "Prediction: {0}, Confidence: {1}%",
-            predicted_index + 1,
+            predicted_index,
             predicted * 100.0
         );
         println!("Actual: {0}", img.label);
@@ -51,9 +55,9 @@ fn main() {
         let loss = output
             .iter()
             .zip(expected.iter())
-            .map(|(p, y)| p.log10() * y)
+            .map(|(p, y)| p.log10() * y) // log(predicted) * actual
             .sum::<f32>();
-        loss * -1.0 / expected.len() as f32
+        loss * -1.0
     }
 
     let mut layers: Vec<Layer> = Vec::new();
@@ -63,7 +67,7 @@ fn main() {
         xn.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
     }
 
-    let img = Image::new(data.next().unwrap());
+    let img = Image::new(data[0]);
     let result = predict(img.clone().values, layers.clone());
     let loss: f32 = loss(result.clone(), img.clone().y_values);
 

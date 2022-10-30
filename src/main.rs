@@ -26,7 +26,7 @@ fn main() {
 
     println!("Initializing neural network...");
 
-    fn predict(input: Vec<f32>, layers: Vec<Layer>) -> Vec<f32> {
+    fn predict(input: &Vec<f32>, layers: &mut Vec<Layer>) -> Vec<f32> {
         layers.iter().reduce(|acc, layer| {
             if acc.neurons != layer.inputs {
                 panic!("Layer shapes do not match") // Sanity check
@@ -34,15 +34,15 @@ fn main() {
             layer
         });
 
-        let mut prev_output: Vec<f32> = input;
-        for mut layer in layers {
+        let mut prev_output: Vec<f32> = input.clone();
+        for layer in layers {
             prev_output = layer.propogate(prev_output.clone()).to_vec();
         }
 
         prev_output
     }
 
-    fn report(output: Vec<f32>, img: Image) {
+    fn report(output: &Vec<f32>, img: &Image) {
         let predicted = output.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
         let predicted_index = output.iter().position(|value| value == predicted).unwrap();
 
@@ -60,9 +60,9 @@ fn main() {
     layers.push(Layer::new(10, 10, softmax)); // Output
 
     let img = Image::new(data[0]);
-    let result = predict(img.clone().values, layers.clone());
-    let loss: f32 = cross_entropy(result.clone(), img.clone().y_values);
+    let result = predict(&img.values, &mut layers);
+    let loss: f32 = cross_entropy(&result, &img.y_values);
 
-    report(result.clone(), img.clone());
+    report(&result, &img);
     println!("{:?}", loss);
 }

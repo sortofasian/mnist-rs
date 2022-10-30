@@ -8,4 +8,3 @@ I made it my goal to inflict as much self-harm as possible in the name of learni
 - Try ConvNet
 - Modularization
 - Refactoring
-- Pass pointers/refs instead of copies into fns

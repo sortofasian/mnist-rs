@@ -10,6 +10,9 @@ use crate::layer::Layer;
 mod image;
 use crate::image::Image;
 
+mod math;
+use crate::math::*;
+
 fn main() {
     println!("Loading dataset...");
     let mut file = String::new();
@@ -51,25 +54,14 @@ fn main() {
         println!("Actual: {0}", img.label);
     }
 
-    fn loss(output: Vec<f32>, expected: Vec<f32>) -> f32 {
-        let loss = output
-            .iter()
-            .zip(expected.iter())
-            .map(|(p, y)| p.log10() * y) // log(predicted) * actual
-            .sum::<f32>();
-        loss * -1.0
-    }
-
     let mut layers: Vec<Layer> = Vec::new();
-    layers.push(Layer::new(784, 10, |xn, _| xn.max(0.0))); // Hidden
-    layers.push(Layer::new(10, 10, |xn, x| softmax(xn, x))); // Output
-    fn softmax(xn: f32, x: Vec<f32>) -> f32 {
-        xn.exp() / x.iter().map(|x| x.exp()).sum::<f32>()
-    }
+    layers.push(Layer::new(784, 20, relu)); // Hidden 1
+    layers.push(Layer::new(20, 10, relu)); // Hidden 2
+    layers.push(Layer::new(10, 10, softmax)); // Output
 
     let img = Image::new(data[0]);
     let result = predict(img.clone().values, layers.clone());
-    let loss: f32 = loss(result.clone(), img.clone().y_values);
+    let loss: f32 = cross_entropy(result.clone(), img.clone().y_values);
 
     report(result.clone(), img.clone());
     println!("{:?}", loss);
